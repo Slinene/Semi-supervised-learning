@@ -1,0 +1,198 @@
+from tensorflow.contrib.learn.python.learn.datasets import base
+from tensorflow.contrib.learn.python.learn.datasets.mnist import extract_images
+from tensorflow.contrib.learn.python.learn.datasets.mnist import extract_labels
+from tensorflow.contrib.learn.python.learn.datasets.mnist import DataSet
+from tensorflow.python.framework import dtypes
+
+import numpy as np
+
+import tools
+import cifar10
+import struct
+
+def loadImageSet(filename):  
+    print ("load image set",filename ) 
+    binfile= open(filename, 'rb')  
+    buffers = binfile.read()  
+   
+    head = struct.unpack_from('>IIII' , buffers ,0)  
+    print( "head,",head  )
+   
+    offset = struct.calcsize('>IIII')  
+    imgNum = head[1]  
+    width = head[2]  
+    height = head[3]  
+    #[60000]*28*28  
+    bits = imgNum * width * height  
+    bitsString = '>' + str(bits) + 'B' #like '>47040000B'  
+   
+    imgs = struct.unpack_from(bitsString,buffers,offset)  
+   
+    binfile.close()  
+    imgs = np.reshape(imgs,[imgNum,1,width*height])  
+    print( "load imgs finished"  )
+    return imgs  
+   
+def loadLabelSet(filename):  
+   
+    print ("load label set",filename  )
+    binfile = open(filename, 'rb')  
+    buffers = binfile.read()  
+   
+    head = struct.unpack_from('>II' , buffers ,0)  
+    print ("head,",head  )
+    imgNum=head[1]  
+   
+    offset = struct.calcsize('>II')  
+    numString = '>'+str(imgNum)+"B"  
+    labels = struct.unpack_from(numString , buffers , offset)  
+    binfile.close()  
+    labels = np.reshape(labels,[imgNum,1])  
+   
+    print ('load label finished' ) 
+    return labels  
+
+#def read_data_sets(train_dir):
+#    # CVDF mirror of http://yann.lecun.com/exdb/mnist/
+#    SOURCE_URL = 'http://yann.lecun.com/exdb/mnist/'
+#
+#    TRAIN_IMAGES = 'train-images-idx3-ubyte.gz'
+#    TRAIN_LABELS = 'train-labels-idx1-ubyte.gz'
+#    TEST_IMAGES = 't10k-images-idx3-ubyte.gz'
+#    TEST_LABELS = 't10k-labels-idx1-ubyte.gz'
+#
+#    local_file = base.maybe_download(TRAIN_IMAGES, train_dir,
+#                                   SOURCE_URL + TRAIN_IMAGES)
+#    with open(local_file, 'rb') as f:
+#        train_images = extract_images(f)
+#
+#    local_file = base.maybe_download(TRAIN_LABELS, train_dir,
+#                                   SOURCE_URL + TRAIN_LABELS)
+#    with open(local_file, 'rb') as f:
+#        train_labels = extract_labels(f, one_hot=True)
+#
+#    local_file = base.maybe_download(TEST_IMAGES, train_dir,
+#                                   SOURCE_URL + TEST_IMAGES)
+#    with open(local_file, 'rb') as f:
+#        test_images = extract_images(f)
+#
+#    local_file = base.maybe_download(TEST_LABELS, train_dir,
+#                                   SOURCE_URL + TEST_LABELS)
+#    with open(local_file, 'rb') as f:
+#        test_labels = extract_labels(f, one_hot=True)
+#
+#    return train_images, train_labels, test_images, test_labels
+
+
+# ------------------------------------------------------------------------------
+def get_mnist_loaders(class_distrib_lab, class_distrib_unlab):
+    train_im = loadImageSet("/opt/Data2/Chenxingyu/Ladder-net/MNIST/train-images.idx3-ubyte")  
+    train_l_not_onehot = loadLabelSet("/opt/Data2/Chenxingyu/Ladder-net/MNIST/train-labels.idx1-ubyte") 
+    train_im=np.reshape(train_im,[60000,28,28,1])
+    test_im = loadImageSet("/opt/Data2/Chenxingyu/Ladder-net/MNIST/t10k-images.idx3-ubyte")  
+    test_l_not_onehot = loadLabelSet("/opt/Data2/Chenxingyu/Ladder-net/MNIST/t10k-labels.idx1-ubyte")
+    test_im=np.reshape(test_im,[10000,28,28,1])
+    #one-hot encoder
+    train_l=np.zeros([len(train_l_not_onehot),10])
+    for i in range(len(train_l)):
+        train_l[i,train_l_not_onehot[i]]=1
+    test_l=np.zeros([len(test_l_not_onehot),10])
+    for i in range(len(test_l)):
+        test_l[i,test_l_not_onehot[i]]=1   
+    
+    lab_im, lab_t, rest_im, rest_t = tools.split_data_set(class_distrib_lab,
+        train_im, train_l, verbose=True)
+    unlab_im, unlab_t, rest_im, rest_t = tools.split_data_set(class_distrib_unlab,
+        rest_im, rest_t)
+
+    print('\n labeled summary:')
+    tools.print_stat(lab_t)
+    print('\n unlabeled summary:')
+    tools.print_stat(unlab_t)
+
+    labeled_data_loader = DataSet(lab_im, lab_t, one_hot=True)
+    test_data_loader = DataSet(test_im, test_l, one_hot=True)
+
+    loader = DataSet(np.vstack((lab_im, unlab_im)), np.vstack((lab_t, unlab_t)),
+        one_hot=True)
+    image_provider = lambda bs: loader.next_batch(bs)[0]
+    
+
+    return image_provider, labeled_data_loader, test_data_loader
+
+
+# ------------------------------------------------------------------------------
+def get_cifar10_loaders(class_distrib_lab):
+    cifar10.maybe_download_and_extract()
+    names = cifar10.load_class_names()
+    print('There are class names in the dataset:')
+    [print(n) for n in names]
+    train_im, _, train_l= cifar10.load_training_data()
+    test_im, _, test_l= cifar10.load_test_data()
+
+    lab_im, lab_t, unlab_im, unlab_t = tools.split_data_set(class_distrib_lab,
+        train_im, train_l, verbose=True)
+
+    print('\n labeled summary:')
+    tools.print_stat(lab_t)
+    print('\n unlabeled summary:')
+    tools.print_stat(unlab_t)
+
+    labeled_data_loader = DataSet(lab_im, lab_t, dtype=dtypes.uint8, reshape=False)
+    test_data_loader = DataSet(test_im, test_l, dtype=dtypes.uint8, reshape=False)
+
+    loader = DataSet(np.vstack((lab_im, unlab_im)), np.vstack((lab_t, unlab_t)),
+        dtype=dtypes.uint8, reshape=False)
+    image_provider = lambda bs: loader.next_batch(bs)[0]
+
+    return image_provider, labeled_data_loader, test_data_loader
+
+def get_Huawei_maincell_loader(axis_x=10,axis_y=10,train_ratio=0.7,dname='maincell'):
+    if axis_x<0 or axis_x>100 or axis_y<0 or axis_y>100:
+        print ('Location error, shoule be 0~100!')
+        
+    else:
+        dataPath='/opt/Data2/Chenxingyu/Ladder-net/True_data'
+        x=np.load(dataPath+'/maincell_map_append.npy')
+        x=x[:,2:98,2:98,:]
+        y=np.load(dataPath+'/maincell_mr_append.npy')
+        y=y[:,2:98,2:98,:]
+    #    new_data_x=np.load(dataPath+'/array_result_map.npy')
+    #    new_data_y=np.load(dataPath+'/array_result_mr.npy')
+        x_log=np.load(dataPath+'/maincell_log_append.npy')
+        city=np.load(dataPath+'/maincell_city_append.npy')
+        print('====----'+dname+' Data has loadded----====')
+    ##find labeled point~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        lab_im,lab_l,unlab_im,unlab_l,test_im,test_l=tools.train_test_split_huawei(axis_x,axis_y,x,y,train_ratio)
+        
+        labeled_data_loader=DataSet(lab_im,lab_l,dtype=dtypes.float32, reshape=False)
+        
+        test_data_loader=DataSet(test_im,test_l,dtype=dtypes.float32,reshape=False)
+        
+        loader=DataSet(np.vstack((lab_im,unlab_im)),np.vstack((lab_l,unlab_l)),dtype=dtypes.float32,reshape=False)
+        
+        image_provider=lambda bs: loader.next_batch(bs)[0]
+        print('the labeled point in (%d,%d) is %d'%(axis_x,axis_y,len(lab_l)+len(test_l)))
+    return(image_provider,labeled_data_loader,test_data_loader,x_log,city)   
+        
+#    for i in range(len(test_5)+1):
+#        x_log.append(np.sum(test_5[0:i]))
+#        city.append('city_%d'%i)
+#    x_log.append(x_log[-1]+len(new_data_x))
+#    x_log=np.array(x_log)
+#    x_log=x_log-1
+#    x_log[0]=0  
+#    x=np.concatenate((x,new_data_x),axis=0)
+#    y=np.concatenate((y,new_data_y),axis=0)
+#    y=-y
+#    x = np.nan_to_num(x)
+#    y = np.nan_to_num(y)
+#    np.save(dataPath+'/maincell_map_append.npy',np.float32(x))
+#    np.save(dataPath+'/maincell_mr_append.npy',np.float32(y))
+#    np.save(dataPath+'/maincell_log_append.npy',x_log)
+#    np.save(dataPath+'/maincell_city_append.npy',city)
+    
+
+
+
+
