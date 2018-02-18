@@ -1,0 +1,90 @@
+import numpy as np
+from sklearn.model_selection import train_test_split
+
+def print_stat(labels):
+    [print('class_{0} = {1}'.format(i,v)) for i,v in enumerate(np.sum(labels,0))]
+
+def split_data_set(class_distrib, samples, labels, verbose=False):
+    """ Split provaided samples and labels according to class_distrib
+        Args:
+            samples: ndarray, 2D array of samples
+            labels: ndarray, 2D array of one-hot labels
+            class_distrib: dict, key - class 0, 1, ..., item - number of samples
+
+        Return:
+            split_samples: ndarray, requiered 2D array of samples
+            split_labels: ndarray, required 2D array of labels
+            rest_samples: ndarray, rested 2D array of samples
+            rest_labels: ndarray, rested 2D array of labels
+
+    """
+    if verbose:
+        print('Set summary:')
+        print_stat(labels)
+    for i,v in enumerate(np.sum(labels,0)):
+        if class_distrib[i] > v:
+            raise ValueError('There is not enough data for class {0},\
+                request{1}, find {2}'.format(i, class_distrib[i], v))
+
+    indxs = []
+    for cl, n in class_distrib.items():
+        indxs.append(np.random.permutation(np.nonzero(labels[:, cl] == 1)[0])[:n])
+    indxs = np.concatenate(indxs)
+    rest_indxs = np.setdiff1d(np.arange(labels.shape[0]), indxs)
+    return samples[indxs], labels[indxs], samples[rest_indxs], labels[rest_indxs], 
+
+
+def train_test_split_huawei(axis_x,axis_y,x,y,train_ratio):
+    """ Split provaided samples and labels from huawei
+        Args:
+            axis_x: predicted point of x value
+            axis_y: predicted point of y value
+            x:input map
+            y:input label
+            train_ratio: raito for train test split
+
+        Return:
+            train_label_im: ndarray, requiered 2D array of labeled samples
+            train_label_l: 1-d value of predicted point, required 2D array of labeled labels
+            unlabel_im: ndarray, rested 2D array of unlabeled samples
+            unlabel_l: default all zeros, rested 2D array of unlabeled labels
+            test_im: ndarray,samples for test
+            test_l: 1-d value ,labels for test
+
+    """
+    label_im=[]
+    label_l=[]
+    unlabel_im=[]
+    unlabel_l=[]
+    for i in range(len(x)):
+        if y[i,axis_x,axis_y,0]!=0:
+            label_im.append(x[i,:,:,:])
+            label_l.append(y[i,axis_x,axis_y,0])
+        else:
+            unlabel_im.append(x[i,:,:,:])
+            unlabel_l.append(y[i,axis_x,axis_y,0])
+    label_im=np.array(label_im)
+    label_l=np.array(label_l)
+    unlabel_im=np.array(unlabel_im)
+    unlabel_l=np.array(unlabel_l)
+    train_label_im,test_im,train_label_l,test_l=train_test_split(label_im,label_l,test_size=1-train_ratio
+                                                                 ,random_state=42)  
+    return (train_label_im,train_label_l[:,np.newaxis],unlabel_im,unlabel_l[:,np.newaxis]
+            ,test_im,test_l[:,np.newaxis])
+    
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
