@@ -1,0 +1,52 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Feb  1 14:59:39 2018
+
+@author: chenxingyu
+"""
+
+import tensorflow as tf
+import sys
+sys.path.append('/opt/Data2/Chenxingyu/Ladder-net/ladder_network-master/')
+import os
+
+import tools
+import ladder_tools
+import param
+from ladder import Ladder
+
+os.environ['CUDA_VISIBLE_DEVICES']='2'
+
+
+image_provider, labeled_data_loader, test_data_loader, train_log, city_name = ladder_tools.get_Huawei_maincell_loader(axis_x=40
+   ,axis_y=40, train_ratio=0.5,dname='maincell')
+
+
+batch_size = 16
+weight_decay = 2e-4
+n_iter = 100000
+learn_rate_start = 1e-1
+learn_rate_end = 1e-3
+noise_std = 0.3
+keep_prob = 0.8
+save_model_every_n_iter = 15000
+path_to_model = 'models_huawei/ladder'
+
+
+#
+#def multi_gpu_model(self):
+#    grads=[]
+#    for i in range (self.num_gpus):
+#        with tf.device('/gpu:%d'%i):
+#            with tf.name_scope('tower_%d'%i):
+
+
+cl = Ladder(input_shape=[96,96,9], n_classes=1, encoder_structure=param.Huawei_encoder,
+    decoder_structure=param.Huawei_decoder, layer_importants=param.Huawei_layer_importants,
+    noise_std=noise_std, do_train=True, scope='ladder_Huawei')
+cl.train_model(image_provider, labeled_data_loader, test_data_loader,
+    batch_size, weight_decay, learn_rate_start, learn_rate_end, keep_prob,
+    n_iter, save_model_every_n_iter, path_to_model)
+cl.sess.close()
+tf.reset_default_graph()
